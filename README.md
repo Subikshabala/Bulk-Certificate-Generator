@@ -29,10 +29,10 @@ Edit `.env` to choose a database URL, storage directory, maximum batch size, or 
 ## Run
 
 ```powershell
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload
 ```
 
-The service is available at `http://127.0.0.1:8000`; interactive API documentation is at `/docs`.
+The service is available at `http://127.0.0.1:8000`; interactive API documentation is at `/docs`. On Windows, plain `uvicorn` may not be on `PATH`; `python -m uvicorn` uses the active environment explicitly.
 
 ## Tests
 
@@ -47,10 +47,18 @@ The tests use a temporary SQLite database and certificate directory.
 Submit a job:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"event_name":"Python Workshop 2026","issuer_name":"Tech Academy","issue_date":"2026-10-12","recipients":[{"name":"Asha K","email":"asha@example.com","course":"Python Basics"}]}'
+curl -X POST http://127.0.0.1:8000/api/v1/jobs \\
+  -H "Content-Type: application/json" \\
+  --data-binary "@sample_request.json"
 ```
+
+PowerShell:
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8000/api/v1/jobs -H "Content-Type: application/json" --data-binary "@sample_request.json"
+```
+
+The sample contains eight valid and invalid recipient entries, including a Tamil name and a case-different duplicate email.
 
 Check job status and recipient outcomes:
 
@@ -92,9 +100,9 @@ Request-level validation failures return 422 without creating a job. Unknown IDs
 - **Failure isolation:** each worker owns a database session and processes one certificate inside its own exception boundary, so one bad render does not stop the batch.
 - **Validation:** required job fields, malformed JSON, and recipient-list size are request-level checks. Name, email normalization, and case-insensitive duplicate checks run per recipient; invalid rows remain visible with an explanation, while the first occurrence of a valid address is retained.
 - **File storage:** PDF files are placed under `CERT_STORAGE_DIR/<job_id>/<certificate_id>.pdf`; path containment is checked and directory/file names use generated IDs rather than user text. ZIP downloads use a spooled temporary file and stream it in chunks.
-- **Recovery:** startup checks jobs still marked `PENDING` or `PROCESSING`; the processor only regenerates certificate rows still marked `PENDING`. Failed or completed rows are not retried.
-- **PDF fonts:** the bundled Bitstream Vera TrueType font covers common Unicode scripts; Helvetica is used if the bundled font cannot load. The bundled font's redistribution terms are in `app/assets/fonts/LICENSE.txt`.
+- **Recovery:** startup creates tables synchronously, then starts crash recovery in a daemon thread so the server can accept requests immediately. Recovery considers only unfinished jobs with `PENDING` certificate rows; `initialize_database_and_recover_jobs()` remains available for deterministic synchronous tests.
+- **PDF fonts:** bundled Noto Sans and Noto Sans Tamil support Latin, Greek, Cyrillic, and Tamil. ReportLab uses HarfBuzz shaping through the pinned `uharfbuzz` dependency for complex Tamil text. Devanagari and CJK are not supported by these bundled fonts.
 
 ## Limitations and Next Improvements
 
-In-process background work can be lost if the process stops during a render. Startup recovery retries rows still pending, but it is not a durable queue. At higher scale, move processing to Celery/Redis. Other useful next steps are S3-compatible storage, authentication and authorization, rate limiting, idempotency keys, and database migrations. The fixed PDF template is a single page; the bundled Vera font covers common scripts but not every Unicode writing system, so a production deployment needing CJK or other broad coverage should bundle the appropriate Noto Sans language font.
+In-process background work can be lost if the process stops during a render. Startup recovery retries rows still pending, but it is not a durable queue. At higher scale, move processing to Celery/Redis. Other useful next steps are S3-compatible storage, authentication and authorization, rate limiting, idempotency keys, and database migrations. The fixed PDF template is a single page. Add other Noto language fonts if Devanagari, CJK, or additional writing systems are required.

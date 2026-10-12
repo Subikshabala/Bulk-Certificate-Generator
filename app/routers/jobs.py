@@ -156,8 +156,6 @@ def get_job(
             Certificate.job_id == job_id, Certificate.status == "PENDING"
         )
     ) or 0
-    job.success_count = success_count
-    job.failed_count = failed_count
     items = None
     if include_items:
         rows = db.scalars(

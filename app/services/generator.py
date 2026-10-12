@@ -15,22 +15,44 @@ from reportlab.platypus import Paragraph
 
 from app import config
 
-FONT_PATH = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Vera.ttf"
-FONT_NAME = "CertificateUnicode"
+FONT_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
+FONT_PATHS = {
+    "NotoSans": FONT_DIR / "NotoSans-Regular.ttf",
+    "NotoSansTamil": FONT_DIR / "NotoSansTamil-Regular.ttf",
+    "CertificateVera": FONT_DIR / "Vera.ttf",
+}
 _FONT_LOCK = Lock()
+_REGISTERED_FONTS: set[str] = set()
+_FONTS_INITIALIZED = False
 
 
-def _font_name() -> str:
-    """Register the bundled Unicode font, falling back to Helvetica if absent."""
-    if FONT_NAME in pdfmetrics.getRegisteredFontNames():
-        return FONT_NAME
+def _register_fonts() -> None:
+    """Register each available bundled font once, safely across worker threads."""
+    global _FONTS_INITIALIZED
+    if _FONTS_INITIALIZED:
+        return
     with _FONT_LOCK:
-        try:
-            if FONT_NAME not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont(FONT_NAME, str(FONT_PATH)))
-            return FONT_NAME
-        except Exception:
-            return "Helvetica"
+        if _FONTS_INITIALIZED:
+            return
+        for name, path in FONT_PATHS.items():
+            if path.is_file():
+                try:
+                    pdfmetrics.registerFont(TTFont(name, str(path)))
+                    _REGISTERED_FONTS.add(name)
+                except Exception:
+                    pass
+        _FONTS_INITIALIZED = True
+
+
+def _font_name(text: object) -> str:
+    """Choose Tamil or general Unicode fonts, then use local fallbacks."""
+    _register_fonts()
+    value = str(text)
+    preferred = "NotoSansTamil" if any("\u0b80" <= char <= "\u0bff" for char in value) else "NotoSans"
+    for name in (preferred, "NotoSans", "CertificateVera"):
+        if name in _REGISTERED_FONTS:
+            return name
+    return "Helvetica"
 
 
 def _draw_paragraph(
@@ -54,6 +76,7 @@ def _draw_paragraph(
             leading=size * 1.25,
             alignment=TA_CENTER,
             textColor=color,
+            shaping=True,
         )
         paragraph = Paragraph(escape(str(text)), style)
         _, height = paragraph.wrap(width, 1000)
@@ -82,26 +105,28 @@ def generate_certificate_pdf(data: dict, output_path: Path) -> Path:
     center = page_width / 2
     dark_green = colors.HexColor("#183B35")
     charcoal = colors.HexColor("#444444")
-    font_name = _font_name()
     _draw_paragraph(pdf, "Certificate of Completion", center, page_height - 78, page_width - 100,
                     "Helvetica-Bold", 28, dark_green)
     _draw_paragraph(pdf, "This is to certify that", center, page_height - 128, page_width - 100,
-                    font_name, 13, charcoal)
+                    _font_name("This is to certify that"), 13, charcoal)
     _draw_paragraph(pdf, data.get("recipient_name", ""), center, page_height - 168, page_width - 120,
-                    font_name, 34, dark_green, shrink=True)
+                    _font_name(data.get("recipient_name", "")), 34, dark_green, shrink=True)
     _draw_paragraph(pdf, "has successfully completed", center, page_height - 230, page_width - 100,
-                    font_name, 13, charcoal)
+                    _font_name("has successfully completed"), 13, charcoal)
 
-    event_text = str(data.get("event_name", ""))
-    if data.get("course"):
-        event_text = f"{event_text} - {data['course']}"
-    _draw_paragraph(pdf, event_text, center, page_height - 260, page_width - 100,
-                    font_name, 20, dark_green)
+    event_name = data.get("event_name", "")
+    _draw_paragraph(pdf, event_name, center, page_height - 260, page_width - 100,
+                    _font_name(event_name), 20, dark_green)
+    course = data.get("course")
+    if course:
+        _draw_paragraph(pdf, course, center, page_height - 290, page_width - 100,
+                        _font_name(course), 14, dark_green)
     _draw_paragraph(pdf, f"Issued on {data.get('issue_date', '')}", center, 130,
-                    page_width - 100, font_name, 12, charcoal)
-    _draw_paragraph(pdf, data.get("issuer_name", ""), center, 100,
-                    page_width - 100, font_name, 13, dark_green)
+                    page_width - 100, _font_name("Issued on"), 12, charcoal)
+    issuer_name = data.get("issuer_name", "")
+    _draw_paragraph(pdf, issuer_name, center, 100,
+                    page_width - 100, _font_name(issuer_name), 13, dark_green)
     _draw_paragraph(pdf, f"Certificate ID: {data.get('certificate_id', '')}", center, 68,
-                    page_width - 100, font_name, 8, charcoal)
+                    page_width - 100, _font_name("Certificate ID:"), 8, charcoal)
     pdf.save()
     return output_path

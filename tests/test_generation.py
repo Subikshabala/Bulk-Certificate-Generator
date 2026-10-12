@@ -1,9 +1,10 @@
 import pytest
 from pathlib import Path
+from reportlab.pdfbase.ttfonts import TTFont
 
 from app import config
 from app.models import Certificate
-from app.services.generator import generate_certificate_pdf
+from app.services.generator import FONT_PATHS, _font_name, generate_certificate_pdf
 from app.services.processor import process_job
 
 
@@ -35,3 +36,40 @@ def test_long_name_generates_a_pdf(test_environment):
         output_path,
     )
     assert output_path.read_bytes().startswith(b"%PDF")
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_font"),
+    [
+        ("பாலாஜி", "NotoSansTamil"),
+        ("கொடி சென்னை", "NotoSansTamil"),
+        ("Αλέξης", "NotoSans"),
+        ("Иван", "NotoSans"),
+        ("José Álvarez", "NotoSans"),
+    ],
+)
+def test_unicode_names_generate_pdfs_and_select_font(test_environment, name, expected_font):
+    output_path = config.CERT_STORAGE_DIR / "unicode-job" / f"{len(name)}.pdf"
+    generate_certificate_pdf(
+        {"recipient_name": name, "event_name": "Workshop", "issuer_name": "Academy"},
+        output_path,
+    )
+    assert output_path.read_bytes().startswith(b"%PDF")
+    assert _font_name(name) == expected_font
+
+
+@pytest.mark.parametrize(
+    ("name", "font_key"),
+    [
+        ("பாலாஜி", "NotoSansTamil"),
+        ("Αλέξης", "NotoSans"),
+        ("Иван", "NotoSans"),
+        ("José Álvarez", "NotoSans"),
+    ],
+)
+def test_selected_font_contains_every_name_character(name, font_key):
+    assert FONT_PATHS[font_key].is_file()
+    assert _font_name(name) == font_key
+    font = TTFont(font_key, str(FONT_PATHS[font_key]))
+    character_map = font.face.charWidths
+    assert all(ord(character) in character_map for character in name)

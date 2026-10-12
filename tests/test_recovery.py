@@ -1,4 +1,5 @@
 from datetime import date
+from threading import Event
 
 from app import main
 from app.models import Certificate, Job
@@ -62,3 +63,14 @@ def test_startup_recovers_pending_rows_only_for_unfinished_jobs(test_environment
         assert unfinished.success_count == 1 and unfinished.failed_count == 1
         assert sorted(row.status for row in rows) == ["FAILED", "SUCCESS"]
         assert completed.status == "COMPLETED" and completed_row.status == "PENDING"
+
+
+def test_recovery_thread_is_daemon(monkeypatch):
+    finished = Event()
+    monkeypatch.setattr(main, "recover_unfinished_jobs", finished.set)
+
+    thread = main.start_recovery_thread()
+
+    assert thread.daemon
+    assert finished.wait(timeout=2)
+    thread.join()

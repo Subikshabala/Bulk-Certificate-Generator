@@ -1,0 +1,15 @@
+{
+  "event_name": "Python Workshop 2026",
+  "issuer_name": "Tech Academy",
+  "issue_date": "2026-10-12",
+  "recipients": [
+    {"name": "Asha K", "email": "asha.k@example.com", "course": "Python Basics"},
+    {"name": "பாலாஜி", "email": "balaji@example.com", "course": "Python Basics"},
+    {"name": "Carlos Ruiz", "email": "carlos@example.com", "course": "Python Basics"},
+    {"name": "Иван Петров", "email": "ivan@example.com", "course": "Python Basics"},
+    {"name": "Αλέξης", "email": "alexis@example.com", "course": "Python Basics"},
+    {"name": "Grace Hopper", "email": "not-an-email", "course": "Python Basics"},
+    {"name": " ", "email": "blank.name@example.com", "course": "Python Basics"},
+    {"name": "Asha Duplicate", "email": "ASHA.K@EXAMPLE.COM", "course": "Python Basics"}
+  ]
+}

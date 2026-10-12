@@ -25,6 +25,7 @@ def test_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(processor, "SessionLocal", testing_sessions)
     monkeypatch.setattr(main, "engine", engine)
     monkeypatch.setattr(main, "SessionLocal", testing_sessions)
+    monkeypatch.setattr(main, "start_recovery_thread", lambda: None)
     monkeypatch.setattr(config, "CERT_STORAGE_DIR", tmp_path / "certificates")
 
     def override_get_db():
