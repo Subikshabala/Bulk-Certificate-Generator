@@ -102,6 +102,7 @@ Request-level validation failures return 422 without creating a job. Unknown IDs
 - **File storage:** PDF files are placed under `CERT_STORAGE_DIR/<job_id>/<certificate_id>.pdf`; path containment is checked and directory/file names use generated IDs rather than user text. ZIP downloads use a spooled temporary file and stream it in chunks.
 - **Recovery:** startup creates tables synchronously, then starts crash recovery in a daemon thread so the server can accept requests immediately. Recovery considers only unfinished jobs with `PENDING` certificate rows; `initialize_database_and_recover_jobs()` remains available for deterministic synchronous tests.
 - **PDF fonts:** bundled Noto Sans and Noto Sans Tamil support Latin, Greek, Cyrillic, and Tamil. ReportLab uses HarfBuzz shaping through the pinned `uharfbuzz` dependency for complex Tamil text. Devanagari and CJK are not supported by these bundled fonts.
+- Fonts are selected per whitespace-separated word, so Tamil and English can be mixed in a name. Latin letters attached directly to a Tamil word with no space, such as `பாலாஜிK`, are a known limitation.
 
 ## Limitations and Next Improvements
 

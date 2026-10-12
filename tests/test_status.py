@@ -18,11 +18,17 @@ def test_status_before_and_after_processing(test_environment, monkeypatch):
     assert before["progress_percent"] == 0
     process_job(job_id)
     after = client.get(
+        f"/api/v1/jobs/{job_id}?include_items=true&limit=10"
+    ).json()
+    assert (
+        after["status"] == "COMPLETED" and after["progress_percent"] == 100
+    ), [(item["email"], item["error_message"]) for item in after["items"]]
+    assert after["success_count"] == 2
+    assert all(item["status"] == "SUCCESS" for item in after["items"])
+    page = client.get(
         f"/api/v1/jobs/{job_id}?include_items=true&limit=1&offset=1"
     ).json()
-    assert after["status"] == "COMPLETED" and after["progress_percent"] == 100
-    assert after["success_count"] == 2 and len(after["items"]) == 1
-    assert after["items"][0]["status"] == "SUCCESS"
+    assert len(page["items"]) == 1
 
 
 def test_unknown_job_is_404(test_environment):

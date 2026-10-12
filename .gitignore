@@ -4,5 +4,6 @@ __pycache__/
 *.py[cod]
 .env
 *.db
+*.zip
 certificates/
 certificate_files/

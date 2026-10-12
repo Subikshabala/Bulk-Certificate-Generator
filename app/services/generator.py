@@ -1,6 +1,7 @@
 """Render a fixed landscape A4 certificate template."""
 
 from pathlib import Path
+import re
 from threading import Lock
 from xml.sax.saxutils import escape
 
@@ -55,6 +56,25 @@ def _font_name(text: object) -> str:
     return "Helvetica"
 
 
+def _font_runs(text: object) -> list[tuple[str, str]]:
+    """Split on whitespace; return (token, font_name) pairs using _font_name."""
+    return [(token, _font_name(token)) for token in re.split(r"(\s+)", str(text)) if token]
+
+
+def _normalize_windows_path(value: str) -> str:
+    """Remove Windows extended-length prefixes for consistent path comparison."""
+    if value.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + value[8:]
+    if value.startswith("\\\\?\\"):
+        return value[4:]
+    return value
+
+
+def _resolved_path(path: Path) -> Path:
+    """Resolve a path and normalize Windows extended-length path prefixes."""
+    return Path(_normalize_windows_path(str(path.resolve())))
+
+
 def _draw_paragraph(
     pdf: canvas.Canvas,
     text: object,
@@ -65,6 +85,7 @@ def _draw_paragraph(
     font_size: int,
     color: colors.Color,
     shrink: bool = False,
+    auto_font: bool = True,
 ) -> None:
     """Draw XML-escaped text, shrinking it if it wraps beyond one line."""
     minimum_size = 16 if shrink else font_size
@@ -78,7 +99,14 @@ def _draw_paragraph(
             textColor=color,
             shaping=True,
         )
-        paragraph = Paragraph(escape(str(text)), style)
+        if auto_font:
+            paragraph_text = "".join(
+                f'<font name="{font}">{escape(token)}</font>'
+                for token, font in _font_runs(text)
+            )
+        else:
+            paragraph_text = escape(str(text))
+        paragraph = Paragraph(paragraph_text, style)
         _, height = paragraph.wrap(width, 1000)
         if not shrink or height <= size * 1.3 or size == minimum_size:
             paragraph.drawOn(pdf, center_x - width / 2, top_y - height)
@@ -87,8 +115,8 @@ def _draw_paragraph(
 
 def generate_certificate_pdf(data: dict, output_path: Path) -> Path:
     """Generate a printable certificate under CERT_STORAGE_DIR."""
-    storage_root = config.CERT_STORAGE_DIR.resolve()
-    output_path = output_path.resolve()
+    storage_root = _resolved_path(config.CERT_STORAGE_DIR)
+    output_path = _resolved_path(output_path)
     if not output_path.is_relative_to(storage_root):
         raise ValueError("Certificate output path must be inside CERT_STORAGE_DIR.")
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,7 +134,7 @@ def generate_certificate_pdf(data: dict, output_path: Path) -> Path:
     dark_green = colors.HexColor("#183B35")
     charcoal = colors.HexColor("#444444")
     _draw_paragraph(pdf, "Certificate of Completion", center, page_height - 78, page_width - 100,
-                    "Helvetica-Bold", 28, dark_green)
+                    "Helvetica-Bold", 28, dark_green, auto_font=False)
     _draw_paragraph(pdf, "This is to certify that", center, page_height - 128, page_width - 100,
                     _font_name("This is to certify that"), 13, charcoal)
     _draw_paragraph(pdf, data.get("recipient_name", ""), center, page_height - 168, page_width - 120,
